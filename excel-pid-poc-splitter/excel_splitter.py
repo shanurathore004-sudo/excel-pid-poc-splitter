@@ -5,13 +5,11 @@ import io
 import os
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}})
-
+CORS(app)
 
 @app.route("/")
 def home():
     return "Excel PID-POC Splitter API Running"
-
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -22,13 +20,13 @@ def upload():
     file = request.files["file"]
 
     try:
-
         df = pd.read_excel(file)
 
+        # Normalize column names
         columns = [c.lower() for c in df.columns]
 
         if "pid" not in columns or "poc" not in columns:
-            return jsonify({"error": "PID or POC column missing"}), 400
+            return jsonify({"error": "PID or POC column not found"}), 400
 
         pid_col = df.columns[columns.index("pid")]
         poc_col = df.columns[columns.index("poc")]
@@ -43,8 +41,8 @@ def upload():
 
                 sheet_name = f"{pid}_{poc}"
 
-                if len(sheet_name) > 31:
-                    sheet_name = sheet_name[:31]
+                # Excel sheet name limit
+                sheet_name = str(sheet_name)[:31]
 
                 data.to_excel(writer, sheet_name=sheet_name, index=False)
 

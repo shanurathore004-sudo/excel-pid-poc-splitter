@@ -1,21 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
 
-<meta charset="UTF-8">
 <title>Excel PID-POC Splitter</title>
-
-<!-- Excel Library -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
-<!-- Zip Library -->
-<script src="https://cdn.jsdelivr.net/npm/jszip/dist/jszip.min.js"></script>
 
 <style>
 
 body{
-font-family:Arial, sans-serif;
+font-family:Arial;
 background:linear-gradient(135deg,#4facfe,#00f2fe);
 height:100vh;
 display:flex;
@@ -33,19 +26,7 @@ text-align:center;
 box-shadow:0 10px 30px rgba(0,0,0,0.2);
 }
 
-h2{
-margin-bottom:20px;
-}
-
-input{
-padding:10px;
-border:1px solid #ddd;
-border-radius:6px;
-width:100%;
-}
-
 button{
-margin-top:20px;
 padding:12px 25px;
 border:none;
 background:#4facfe;
@@ -53,16 +34,10 @@ color:white;
 font-size:16px;
 border-radius:6px;
 cursor:pointer;
-width:100%;
 }
 
 button:hover{
 background:#2f8df5;
-}
-
-#status{
-margin-top:15px;
-font-weight:bold;
 }
 
 </style>
@@ -75,9 +50,11 @@ font-weight:bold;
 
 <h2>Excel PID-POC Splitter</h2>
 
-<input type="file" id="fileInput">
+<input type="file" id="file">
 
-<button onclick="processFile()">Generate Files</button>
+<br><br>
+
+<button onclick="uploadFile()">Generate Files</button>
 
 <p id="status"></p>
 
@@ -85,78 +62,55 @@ font-weight:bold;
 
 <script>
 
-async function processFile(){
+async function uploadFile(){
 
-const fileInput=document.getElementById("fileInput")
+const file = document.getElementById("file").files[0]
 
-if(fileInput.files.length===0){
-alert("Please upload an Excel file")
+if(!file){
+alert("Please select a file")
 return
 }
 
-document.getElementById("status").innerText="Processing..."
+document.getElementById("status").innerText="Processing file... (server may take 30s to wake up)"
 
-const file=fileInput.files[0]
+const formData = new FormData()
 
-const data=await file.arrayBuffer()
+formData.append("file",file)
 
-const workbook=XLSX.read(data)
+try{
 
-const sheet=workbook.Sheets[workbook.SheetNames[0]]
-
-const rows=XLSX.utils.sheet_to_json(sheet)
-
-let groups={}
-
-rows.forEach(row=>{
-
-const pid=row.PID
-const poc=row.POC
-
-const key=pid+"_"+poc
-
-if(!groups[key]){
-groups[key]=[]
-}
-
-groups[key].push(row)
-
+const response = await fetch("https://excel-pid-poc-splitter-1.onrender.com/upload",{
+method:"POST",
+body:formData
 })
 
-const zip=new JSZip()
-
-for(const key in groups){
-
-const ws=XLSX.utils.json_to_sheet(groups[key])
-
-const wb=XLSX.utils.book_new()
-
-XLSX.utils.book_append_sheet(wb,ws,"Sheet1")
-
-const excelData=XLSX.write(wb,{
-bookType:"xlsx",
-type:"array"
-})
-
-zip.file(key+".xlsx",excelData)
-
+if(!response.ok){
+document.getElementById("status").innerText="Error processing file"
+return
 }
 
-const content=await zip.generateAsync({type:"blob"})
+const blob = await response.blob()
 
 const link=document.createElement("a")
 
-link.href=URL.createObjectURL(content)
+link.href=window.URL.createObjectURL(blob)
 
 link.download="split_files.zip"
 
 link.click()
 
-document.getElementById("status").innerText="Download Ready"
+document.getElementById("status").innerText="Download started"
+
+}catch(error){
+
+document.getElementById("status").innerText="Server error"
+
+}
 
 }
 
 </script>
 
 </body>
+
 </html>

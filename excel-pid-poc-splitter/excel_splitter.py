@@ -1,7 +1,6 @@
 from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 import pandas as pd
-import zipfile
 import io
 import os
 
@@ -24,48 +23,38 @@ def upload():
 
     try:
 
-        xls = pd.ExcelFile(file)
-        zip_buffer = io.BytesIO()
+        df = pd.read_excel(file)
 
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
+        columns = [c.lower() for c in df.columns]
 
-            for sheet in xls.sheet_names:
+        if "pid" not in columns or "poc" not in columns:
+            return jsonify({"error": "PID or POC column missing"}), 400
 
-                df = xls.parse(sheet)
+        pid_col = df.columns[columns.index("pid")]
+        poc_col = df.columns[columns.index("poc")]
 
-                cols = [c.lower() for c in df.columns]
+        grouped = df.groupby([pid_col, poc_col])
 
-                if "pid" not in cols or "poc" not in cols:
-                    continue
+        output = io.BytesIO()
 
-                pid_col = df.columns[cols.index("pid")]
-                poc_col = df.columns[cols.index("poc")]
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
 
-                for (pid, poc), data in df.groupby([pid_col, poc_col]):
+            for (pid, poc), data in grouped:
 
-                    filename = f"{sheet}_{pid}_{poc}.xlsx"
+                sheet_name = f"{pid}_{poc}"
 
-                    excel_buffer = io.BytesIO()
+                if len(sheet_name) > 31:
+                    sheet_name = sheet_name[:31]
 
-                    data.to_excel(
-                        excel_buffer,
-                        index=False,
-                        engine="xlsxwriter"
-                    )
+                data.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                    z.writestr(filename, excel_buffer.getvalue())
-
-                    del data
-
-                del df
-
-        zip_buffer.seek(0)
+        output.seek(0)
 
         return send_file(
-            zip_buffer,
-            mimetype="application/zip",
+            output,
             as_attachment=True,
-            download_name="split_files.zip"
+            download_name="split_files.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
     except Exception as e:

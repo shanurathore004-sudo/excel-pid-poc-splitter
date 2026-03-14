@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 
@@ -72,11 +71,13 @@ alert("Please select a file")
 return
 }
 
-document.getElementById("status").innerText="Processing file..."
+document.getElementById("status").innerText="Processing file... (server may take 30s to wake up)"
 
 const formData = new FormData()
 
 formData.append("file",file)
+
+try{
 
 const response = await fetch("https://excel-pid-poc-splitter-1.onrender.com/upload",{
 method:"POST",
@@ -99,6 +100,12 @@ link.download="split_files.zip"
 link.click()
 
 document.getElementById("status").innerText="Download started"
+
+}catch(error){
+
+document.getElementById("status").innerText="Server error"
+
+}
 
 }
 

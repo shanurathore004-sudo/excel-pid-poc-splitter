@@ -1,6 +1,6 @@
 flask
 pandas
-openpyxl
-xlrd
+xlsxwriter
 gunicorn
 flask-cors
+openpyxl

@@ -25,7 +25,6 @@ def upload():
     try:
 
         xls = pd.ExcelFile(file)
-
         zip_buffer = io.BytesIO()
 
         with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
@@ -34,25 +33,31 @@ def upload():
 
                 df = xls.parse(sheet)
 
-                columns = [c.lower() for c in df.columns]
+                cols = [c.lower() for c in df.columns]
 
-                if "pid" not in columns or "poc" not in columns:
+                if "pid" not in cols or "poc" not in cols:
                     continue
 
-                pid_col = df.columns[columns.index("pid")]
-                poc_col = df.columns[columns.index("poc")]
+                pid_col = df.columns[cols.index("pid")]
+                poc_col = df.columns[cols.index("poc")]
 
-                grouped = df.groupby([pid_col, poc_col])
-
-                for (pid, poc), data in grouped:
+                for (pid, poc), data in df.groupby([pid_col, poc_col]):
 
                     filename = f"{sheet}_{pid}_{poc}.xlsx"
 
                     excel_buffer = io.BytesIO()
 
-                    data.to_excel(excel_buffer, index=False)
+                    data.to_excel(
+                        excel_buffer,
+                        index=False,
+                        engine="xlsxwriter"
+                    )
 
                     z.writestr(filename, excel_buffer.getvalue())
+
+                    del data
+
+                del df
 
         zip_buffer.seek(0)
 

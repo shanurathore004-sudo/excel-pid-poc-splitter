@@ -3,3 +3,4 @@ pandas
 openpyxl
 xlrd
 gunicorn
+flask-cors

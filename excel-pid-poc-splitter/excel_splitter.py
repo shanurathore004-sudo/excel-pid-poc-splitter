@@ -2,17 +2,11 @@ from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 import pandas as pd
 import zipfile
+import io
 import os
-import uuid
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
-
-UPLOAD_FOLDER = "uploads"
-OUTPUT_FOLDER = "output"
-
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 
 @app.route("/")
@@ -28,18 +22,13 @@ def upload():
 
     file = request.files["file"]
 
-    unique_id = str(uuid.uuid4())
-    upload_path = os.path.join(UPLOAD_FOLDER, unique_id + "_" + file.filename)
-
-    file.save(upload_path)
-
     try:
 
-        xls = pd.ExcelFile(upload_path)
+        xls = pd.ExcelFile(file)
 
-        zip_name = os.path.join(OUTPUT_FOLDER, unique_id + ".zip")
+        zip_buffer = io.BytesIO()
 
-        with zipfile.ZipFile(zip_name, "w") as z:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
 
             for sheet in xls.sheet_names:
 
@@ -57,22 +46,22 @@ def upload():
 
                 for (pid, poc), data in grouped:
 
-                    safe_pid = str(pid).replace("/", "_")
-                    safe_poc = str(poc).replace("/", "_")
+                    filename = f"{sheet}_{pid}_{poc}.xlsx"
 
-                    filename = f"{sheet}_{safe_pid}_{safe_poc}.xlsx"
+                    excel_buffer = io.BytesIO()
 
-                    temp_path = os.path.join(OUTPUT_FOLDER, filename)
+                    data.to_excel(excel_buffer, index=False)
 
-                    data.to_excel(temp_path, index=False)
+                    z.writestr(filename, excel_buffer.getvalue())
 
-                    z.write(temp_path, filename)
+        zip_buffer.seek(0)
 
-                    os.remove(temp_path)
-
-                del df
-
-        return send_file(zip_name, as_attachment=True)
+        return send_file(
+            zip_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="split_files.zip"
+        )
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500

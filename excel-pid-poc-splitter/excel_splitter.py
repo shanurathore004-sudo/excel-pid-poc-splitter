@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, jsonify
 from flask_cors import CORS
 import pandas as pd
 import zipfile
@@ -6,7 +6,7 @@ import os
 import uuid
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 UPLOAD_FOLDER = "uploads"
 OUTPUT_FOLDER = "output"
@@ -24,55 +24,58 @@ def home():
 def upload():
 
     if "file" not in request.files:
-        return {"error": "No file uploaded"}
+        return jsonify({"error": "No file uploaded"}), 400
 
     file = request.files["file"]
 
     unique_id = str(uuid.uuid4())
-    filepath = os.path.join(UPLOAD_FOLDER, unique_id + "_" + file.filename)
+    upload_path = os.path.join(UPLOAD_FOLDER, unique_id + "_" + file.filename)
 
-    file.save(filepath)
+    file.save(upload_path)
 
-    xls = pd.ExcelFile(filepath)
+    try:
 
-    output_files = []
+        xls = pd.ExcelFile(upload_path)
 
-    for sheet in xls.sheet_names:
+        zip_name = os.path.join(OUTPUT_FOLDER, unique_id + ".zip")
 
-        df = pd.read_excel(filepath, sheet_name=sheet)
+        with zipfile.ZipFile(zip_name, "w") as z:
 
-        columns = [c.lower() for c in df.columns]
+            for sheet in xls.sheet_names:
 
-        if "pid" not in columns or "poc" not in columns:
-            continue
+                df = xls.parse(sheet)
 
-        pid_col = df.columns[columns.index("pid")]
-        poc_col = df.columns[columns.index("poc")]
+                columns = [c.lower() for c in df.columns]
 
-        grouped = df.groupby([pid_col, poc_col])
+                if "pid" not in columns or "poc" not in columns:
+                    continue
 
-        for (pid, poc), data in grouped:
+                pid_col = df.columns[columns.index("pid")]
+                poc_col = df.columns[columns.index("poc")]
 
-            safe_pid = str(pid).replace("/", "_")
-            safe_poc = str(poc).replace("/", "_")
+                grouped = df.groupby([pid_col, poc_col])
 
-            filename = f"{sheet}_{safe_pid}_{safe_poc}.xlsx"
-            filepath_out = os.path.join(OUTPUT_FOLDER, filename)
+                for (pid, poc), data in grouped:
 
-            data.to_excel(filepath_out, index=False)
+                    safe_pid = str(pid).replace("/", "_")
+                    safe_poc = str(poc).replace("/", "_")
 
-            output_files.append(filepath_out)
+                    filename = f"{sheet}_{safe_pid}_{safe_poc}.xlsx"
 
-    if not output_files:
-        return {"error": "No PID + POC columns found"}
+                    temp_path = os.path.join(OUTPUT_FOLDER, filename)
 
-    zip_name = os.path.join(OUTPUT_FOLDER, unique_id + ".zip")
+                    data.to_excel(temp_path, index=False)
 
-    with zipfile.ZipFile(zip_name, "w") as z:
-        for f in output_files:
-            z.write(f, os.path.basename(f))
+                    z.write(temp_path, filename)
 
-    return send_file(zip_name, as_attachment=True)
+                    os.remove(temp_path)
+
+                del df
+
+        return send_file(zip_name, as_attachment=True)
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
